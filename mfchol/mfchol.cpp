@@ -178,7 +178,9 @@ struct MF {
     void print_ordering(string ordering_file, string neighbors_file) {
         int nfronts = fronts.size();
         int nlevels = log2(nfronts + 1);
-        cout << "nlevels = " << nlevels << endl;
+        assert(nfronts == pow(2, nlevels)-1); 
+        cout << "SCOTCH created nlevels = " << nlevels << endl;
+        // This will only work if SCOTCH's ordering is a perfect binary tree      
         auto depth = [this](int i){
             int l = 0;
             while(treetab[i] != -1) {
@@ -217,6 +219,9 @@ struct MF {
                 neighbors[lvl][sep].push_back(invperm[f->rows[ii]]);   
             }
             count[lvl]++;
+        }
+        for(int l = 0; l < nlevels; l++) {
+            assert(count[l] == pow(2, nlevels - l - 1));
         }
         // Print to file
         int nlines = pow(2, nlevels)-1;
@@ -316,7 +321,7 @@ MF initialize(SpMat& A, int nlevels) {
     cout << treetab.transpose() << endl;
     for(int b = 0; b < nblk; b++) {
         int p = treetab[b];
-        assert(p == -1 || p > b); // Important for the following loop and for everything else
+        assert(p == -1 || p > b); // Important for the following loop and for everything else. Leaves come first.
         if(p != -1) {
             fronts[p]->childrens.push_back(fronts[b]);
         }
