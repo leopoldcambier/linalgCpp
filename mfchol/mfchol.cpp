@@ -5,8 +5,8 @@
  *  - Link with -lscotch -lscotcherr -lblas -llapack
  *      g++ -Wextra -Wall --std=c++11 -O3 -o mfchol mfchol.cpp -I(...) -lscotch -lscotcherr -lblas -llapack
  *  On Sherlock, something like this should be enough
- *      2) module load scotch eigen openblas
- *      3) g++ -Wextra -Wall --std=c++11 -O3 -o mfchol mfchol.cpp -I ../mmio/ -I $CPATH -L $LIBRARY_PATH  
+ *      module load scotch eigen openblas
+ *      g++ -Wextra -Wall --std=c++11 -O3 -o mfchol mfchol.cpp -I ../mmio/ -I $CPATH -L $LIBRARY_PATH  
  *         -lscotch -lscotcherr -lblas -llapack
  *
  * RUN:
