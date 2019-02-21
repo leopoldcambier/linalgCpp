@@ -7,7 +7,7 @@
  *  On Sherlock, something like this should be enough
  *      module load scotch eigen openblas
  *      g++ -Wextra -Wall --std=c++11 -O3 -o mfchol mfchol.cpp -I ../mmio/ -I $CPATH -L $LIBRARY_PATH  
- *         -lscotch -lscotcherr -lblas -llapack
+ *         -lscotch -lscotcherr -lblas -llapack -lz
  *
  * RUN:
  *  ./mfchol input_file.mm nlevels output_ordering.ord output_neighbors.nbr
@@ -64,15 +64,18 @@ using namespace Eigen;
 typedef SparseMatrix<double> SpMat;
 
 struct Front {
+    int id;
     int start;
     int self_size;
     int nbr_size;
     vector<int> rows;
     vector<Front*> childrens;
+    Front* parent;
     MatrixXd* front;
-    Front(int start_, int size_) : start(start_), self_size(size_) {
+    Front(int id_, int start_, int size_) : id(id_), start(start_), self_size(size_) {
         nbr_size = 0;
-        childrens = vector<Front*>(0);        
+        childrens = vector<Front*>(0);  
+        parent = nullptr;      
         rows = vector<int>(0);
         front = nullptr;
     };
@@ -151,8 +154,7 @@ struct MF {
     vector<Front*> fronts;
     VectorXi perm;
     VectorXi invperm;
-    VectorXi treetab;
-    MF(vector<Front*> fronts_, VectorXi perm_, VectorXi invperm_, VectorXi treetab_) : fronts(fronts_), perm(perm_), invperm(invperm_), treetab(treetab_) {};
+    MF(vector<Front*> fronts_, VectorXi perm_, VectorXi invperm_) : fronts(fronts_), perm(perm_), invperm(invperm_) {};
     void factorize() { 
         for(auto f: fronts) // In this code, the fronts are ordered properly, so we can just go through, but normally this has to be done bit more carefully
         {
@@ -175,88 +177,67 @@ struct MF {
             f->extract(A);
         }
     }
-    void print_ordering(string ordering_file, string neighbors_file) {
+    void print_ordering(string ordering_file, string neighbors_file, string tree_file) {
         int nfronts = fronts.size();
-        int nlevels = log2(nfronts + 1);
-        assert(nfronts == pow(2, nlevels)-1); 
-        cout << "SCOTCH created nlevels = " << nlevels << endl;
-        // This will only work if SCOTCH's ordering is a perfect binary tree      
-        auto depth = [this](int i){
-            int l = 0;
-            while(treetab[i] != -1) {
-                i = treetab[i];
-                l ++;
-            }
-            return l;
-        };
-        // Scotch ordering is, for a 3-lvl tree,
-        // 2  2  6  5  5  6 -1
-        // meaning
-        //      6
-        //    2   5
-        //   0 1 3 4 
-        // We can get the leaf->top ordering just by sorting the vector
-        for(int i = 0; i < treetab.size(); i++) {
-            cout << i << " " << depth(i) << endl;
-        }
-        vector<vector<vector<int>>> separators(nlevels);
-        vector<vector<vector<int>>> neighbors(nlevels);
-        vector<int>                 count(nlevels, 0);
-        for(int l = 0; l < nlevels; l++) {
-            separators[l] = vector<vector<int>>(pow(2, nlevels - 1 - l));
-            neighbors[l]  = vector<vector<int>>(pow(2, nlevels - 1 - l));
-        }
-        for(int fi = 0; fi < fronts.size(); fi++) {
-            Front* f = fronts[fi];
-            int lvl   = nlevels - 1 - depth(fi);
-            int sep   = count[lvl];
-            cout << fi << " is at level " << lvl << " with count " << sep << endl;
-            for(int ii = 0; ii < f->self_size; ii++) {
-                assert(f->rows[ii] == f->start + ii);
-                separators[lvl][sep].push_back(invperm[f->rows[ii]]);   
-            }
-            for(int ii = f->self_size; ii < f->self_size + f->nbr_size; ii++) {
-                neighbors[lvl][sep].push_back(invperm[f->rows[ii]]);   
-            }
-            count[lvl]++;
-        }
-        for(int l = 0; l < nlevels; l++) {
-            assert(count[l] == pow(2, nlevels - l - 1));
-        }
-        // Print to file
-        int nlines = pow(2, nlevels)-1;
-        int line = 0;
+        
         ofstream ord_file;
         ord_file.open(ordering_file);
-        ord_file << nlevels << " " << nlines << "\n";
-        for(int l = 0; l < nlevels; l++) {
-            for(int s = 0; s < separators[l].size(); s++) {
-                ord_file << l << " " << s << " " << separators[l][s].size() << " ";
-                for(auto i : separators[l][s]) {
-                    ord_file << i << " "; 
-                }
-                ord_file << "\n";
-                line++;
-            }
-        }
-        assert(line == nlines);
-        line = 0;
-        ord_file.close();
+        ord_file << nfronts << "\n";
+
         ofstream nbr_file;
         nbr_file.open(neighbors_file);
-        nbr_file << nlevels << " " << nlines << "\n";
-        for(int l = 0; l < nlevels; l++) {
-            for(int s = 0; s < neighbors[l].size(); s++) {
-                nbr_file << l << " " << s << " " << neighbors[l][s].size() << " ";
-                for(auto i : neighbors[l][s]) {
-                    nbr_file << i << " "; 
-                }
-                nbr_file << "\n";
-                line++;
+        nbr_file << nfronts << "\n";
+
+        ofstream t_file;
+        t_file.open(tree_file);
+        t_file << nfronts << "\n";
+
+        /** Prints:
+         *
+         * ordering file:
+         * 1st line: 
+         * <number of separators>
+         * Each other line: 
+         * <separator id> <number of node> <self 0> <self 1> ...
+         *
+         * neighbors file:
+         * 1st line: 
+         * <number of separators>
+         * Each other line: 
+         * <separator id> <number of neighbors> <neighbor 0> <neighbor 1> ...
+         *
+         * tree file:
+         * 1st line:
+         * <number of separators>
+         * Each other line:
+         * <separator id> <number of children> <parent id> <children 1 id> <children 2 id> ...
+         * <parent id> is (-1) if the separator as no parent
+         */
+
+
+        for(int fi = 0; fi < nfronts; fi++) {            
+            Front* f = fronts[fi];
+            assert(fi == f->id);
+            
+            ord_file << fi << " " << f->self_size;
+            for(int ii = 0; ii < f->self_size; ii++) {
+                assert(f->rows[ii] == f->start + ii);
+                ord_file << " " << invperm[f->rows[ii]]; // Self
             }
+            ord_file << "\n";
+
+            nbr_file << fi << " " << f->nbr_size;
+            for(int ii = f->self_size; ii < f->self_size + f->nbr_size; ii++) {
+                nbr_file << " " << invperm[f->rows[ii]]; // Nbrs
+            } 
+            nbr_file << "\n";
+
+            t_file << fi << " " << (f->parent == nullptr ? -1 : f->parent->id) << " " << f->childrens.size();
+            for(int c = 0 ; c < f->childrens.size(); c++) {
+                t_file << " " << f->childrens[c]->id;
+            }
+            t_file << "\n";
         }
-        assert(line == nlines);
-        nbr_file.close();
     }
 };
 
@@ -313,10 +294,10 @@ MF initialize(SpMat& A, int nlevels) {
     for(int b = 0; b < nblk; b++) {
         int start = rangtab[b];;
         int self_size = rangtab[b+1] - rangtab[b];
-        Front* f = new Front(start, self_size);
+        Front* f = new Front(b, start, self_size);
         fronts.push_back(f);
     }
-    // Set the children
+    // Set the children & parent
     treetab.conservativeResize(nblk);
     cout << treetab.transpose() << endl;
     for(int b = 0; b < nblk; b++) {
@@ -324,6 +305,7 @@ MF initialize(SpMat& A, int nlevels) {
         assert(p == -1 || p > b); // Important for the following loop and for everything else. Leaves come first.
         if(p != -1) {
             fronts[p]->childrens.push_back(fronts[b]);
+            fronts[b]->parent = fronts[p];
         }
     }
     // Fill and allocate everything
@@ -373,7 +355,7 @@ MF initialize(SpMat& A, int nlevels) {
         f->front = front;
     }
     // FIXME Need to free SCOTCH structures
-    return MF(fronts, permtab, peritab, treetab);
+    return MF(fronts, permtab, peritab);
 }
 
 int main(int argc, char** argv) {
@@ -381,6 +363,7 @@ int main(int argc, char** argv) {
     string filename = "neglapl_2_128.mm";
     string ordering = "ordering.ord";
     string nbrs     = "nbrs.nbr";
+    string tree     = "tree.tree";
     if(argc >= 2) {
         filename = argv[1];
     }
@@ -393,6 +376,9 @@ int main(int argc, char** argv) {
     if(argc >= 5) {
         nbrs = argv[4];
     }
+    if(argc >= 6) {
+        tree = argv[5];
+    }
     // Read matrix
     cout << "Matrix file " << filename << endl;
     SpMat A = mmio::sp_mmread<double,int>(filename);
@@ -402,7 +388,8 @@ int main(int argc, char** argv) {
     MF mf = initialize(A, nlevels);
     cout << "Ordering file written to " << ordering << endl;
     cout << "Nbrs file written to " << nbrs << endl;
-    mf.print_ordering(ordering, nbrs);
+    cout << "Tree file written to " << tree << endl;
+    mf.print_ordering(ordering, nbrs, tree);
     // Factor
     cout << "Factoring..." << endl;
     mf.factorize();
