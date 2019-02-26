@@ -32,8 +32,9 @@ struct Front {
     std::vector<int> rows;
     std::vector<Front*> childrens;
     Front* parent;
-    Eigen::MatrixXd* front;
+    std::vector<double> front; // size x size = (self_size + nbr_size) x (self_size + nbr_size), col major
     Front(int id_, int start_, int size_);
+    int size();
     void extend_add();
     void factor();
     void fwd(Eigen::VectorXd& xglob);

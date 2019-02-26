@@ -47,8 +47,13 @@ Front::Front(int id_, int start_, int size_) : id(id_), start(start_), self_size
     childrens = vector<Front*>(0);  
     parent = nullptr;      
     rows = vector<int>(0);
-    front = nullptr;
+    front = vector<double>(0);
 };
+int Front::size() {
+    assert(rows.size() == self_size + nbr_size);
+    assert(front.size() == (self_size + nbr_size) * (self_size + nbr_size));
+    return rows.size();
+}
 void Front::extend_add() {
     for(Front* c: childrens) {
         int cs = c->self_size;
@@ -63,16 +68,16 @@ void Front::extend_add() {
             int fj = subids[j];
             for(int i = 0; i < c->nbr_size; i++) {
                 int fi = subids[i];
-                (*this->front)(fi,fj) += (*c->front)(cs + i, cs + j);                    
+                this->front[fi + fj * this->size()] += c->front[(cs + i) + (cs + j) * c->size()];
             }
         }
     }
 };
 void Front::factor() {
-    int lda = front->rows();
-    double* Ass = front->data();
-    double* Ans = front->data() + self_size;
-    double* Ann = front->data() + self_size * lda + self_size;                
+    int     lda = size();
+    double* Ass = front.data();
+    double* Ans = front.data() + self_size;
+    double* Ann = front.data() + self_size * lda + self_size;                
     // POTRF
     int err = LAPACKE_dpotrf(LAPACK_COL_MAJOR, 'L', self_size, Ass, lda);
     assert(err == 0);
@@ -82,22 +87,22 @@ void Front::factor() {
     cblas_dsyrk(CblasColMajor, CblasLower, CblasNoTrans, nbr_size, self_size, -1.0, Ans, lda, 1.0, Ann, lda);        
 }      
 void Front::fwd(VectorXd& xglob) {     
-    double* Lss = front->data();
-    double* Lns = front->data() + self_size;
+    double* Lss = front.data();
+    double* Lns = front.data() + self_size;
     auto xs = xglob.segment(start, self_size);
     VectorXd xn = VectorXd::Zero(nbr_size);
     // x[s] <- Lss^-1 x[s]
-    cblas_dtrsv(CblasColMajor, CblasLower, CblasNoTrans, CblasNonUnit, self_size, Lss, front->rows(), xs.data(), 1);
+    cblas_dtrsv(CblasColMajor, CblasLower, CblasNoTrans, CblasNonUnit, self_size, Lss, size(), xs.data(), 1);
     // xn = -Lns x[s]
-    cblas_dgemv(CblasColMajor, CblasNoTrans, nbr_size, self_size, -1.0, Lns, front->rows(), xs.data(), 1, 0.0, xn.data(), 1); // beta = 0.0     
+    cblas_dgemv(CblasColMajor, CblasNoTrans, nbr_size, self_size, -1.0, Lns, size(), xs.data(), 1, 0.0, xn.data(), 1); // beta = 0.0     
     // x[n] = xn
     for(int i = 0; i < nbr_size; i++) {
         xglob[rows[self_size + i]] += xn[i]; // ~ beta = 1.0
     }
 }
 void Front::bwd(VectorXd& xglob) {        
-    double* Lss = front->data();        
-    double* Lns = front->data() + self_size;
+    double* Lss = front.data();        
+    double* Lns = front.data() + self_size;
     auto xs = xglob.segment(start, self_size);
     VectorXd xn = VectorXd::Zero(nbr_size);
     // xn = x[n]
@@ -105,16 +110,16 @@ void Front::bwd(VectorXd& xglob) {
         xn[i] = xglob[rows[self_size + i]];
     }
     // x[s] -= Lns^T xn
-    cblas_dgemv(CblasColMajor, CblasTrans, nbr_size, self_size, -1.0, Lns, front->rows(), xn.data(), 1, 1.0, xs.data(), 1); // beta = 1.0     
+    cblas_dgemv(CblasColMajor, CblasTrans, nbr_size, self_size, -1.0, Lns, size(), xn.data(), 1, 1.0, xs.data(), 1); // beta = 1.0     
     // xs = Lss^-T xs
-    cblas_dtrsv(CblasColMajor, CblasLower, CblasTrans, CblasNonUnit, self_size, Lss, front->rows(), xs.data(), 1);
+    cblas_dtrsv(CblasColMajor, CblasLower, CblasTrans, CblasNonUnit, self_size, Lss, size(), xs.data(), 1);
 }
 void Front::extract(MatrixXd& A) {
-    for(int j = 0; j < front->cols(); j++) {
-        for(int i = 0; i < front->rows(); i++) {
+    for(int j = 0; j < size(); j++) {
+        for(int i = 0; i < size(); i++) {
             int Ai = rows[i];
             int Aj = rows[j];
-            A(Ai,Aj) = (*front)(i,j);
+            A(Ai,Aj) = front[i + j * size()];
         }
     }
 }
@@ -297,8 +302,8 @@ MF initialize(SpMat& A, int nlevels) {
         vector<int> rows(rows_.begin(), rows_.end());
         sort(rows.begin(), rows.end());
         // Allocate and fill front
-        MatrixXd* front = new MatrixXd(rows.size(), rows.size());
-        *front = MatrixXd::Zero(rows.size(), rows.size());
+        int M = rows.size();
+        f->front = vector<double>(M * M, 0.0);
         for(int j = start; j < end; j++) {
             for (SpMat::InnerIterator it(App,j); it; ++it) {
                 int i = it.row();              
@@ -309,14 +314,13 @@ MF initialize(SpMat& A, int nlevels) {
                     assert(row != rows.end());
                     int fi = distance(rows.begin(), row);
                     int fj = j - start;
-                    (*front)(fi,fj) = v;    
+                    f->front[fi + fj * M] = v;    
                 }
             }
         }
         // Record        
         f->nbr_size = rows.size() - self_size;
         f->rows = rows;
-        f->front = front;
     }
     // FIXME Need to free SCOTCH structures
     return MF(fronts, permtab, peritab);
