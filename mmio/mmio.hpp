@@ -58,15 +58,15 @@ namespace mmio {
     /** Write a line real / cplx of coordinate values **/
     template<typename V, typename I>
     std::string get_line(I i, I j, V v) {
-        return std::to_string(i) + " " + std::to_string(j) + " " + std::to_string(v);
+        return std::to_string(i+1) + " " + std::to_string(j+1) + " " + std::to_string(v);
     };
     template<>
     std::string get_line(int i, int j, std::complex<double> v) {
-        return std::to_string(i) + " " + std::to_string(j) + " " + std::to_string(v.real()) + " " + std::to_string(v.imag());
+        return std::to_string(i+1) + " " + std::to_string(j+1) + " " + std::to_string(v.real()) + " " + std::to_string(v.imag());
     };
     template<>
     std::string get_line(int i, int j, std::complex<float> v) {
-        return std::to_string(i) + " " + std::to_string(j) + " " + std::to_string(v.real()) + " " + std::to_string(v.imag());
+        return std::to_string(i+1) + " " + std::to_string(j+1) + " " + std::to_string(v.real()) + " " + std::to_string(v.imag());
     };
 
     /** Symmetric (real) / hermitian (cplx) **/
