@@ -16,14 +16,23 @@ int main() {
 
     auto B = dense_mmread<double>("test_4.mm");
     std::cout << B << std::endl;
+    dense_mmwrite("test_out_2.mm", B);
+    auto B2 = dense_mmread<double>("test_out_2.mm");
+    std::cout << "ERROR ? " << (B - B2).norm() << std::endl;
 
     auto C = sp_mmread<double,int>("neglapl_2_3.mm");
     std::cout << C << std::endl;
     sp_mmwrite("test_out_1.mm", C);
-
-    dense_mmwrite("test_out_2.mm", B);
+    auto C2 = sp_mmread<double,int>("test_out_1.mm");
+    std::cout << "ERROR ? " << (C - C2).norm() << std::endl;
 
     Eigen::MatrixXd D = B * B.transpose();
     std::cout << D << std::endl;
     dense_mmwrite("test_out_3.mm", D, mmio::property::symmetric);
+
+    auto F = sp_mmread<double,int>("test_5.mm");
+    std::cout << std::setprecision(20) << F << std::endl;
+    sp_mmwrite("test_out_4.mm", F);
+    auto F2 = sp_mmread<double,int>("test_out_4.mm");
+    std::cout << "ERROR ? " << (F - F2).norm() << std::endl;
 }

@@ -8,79 +8,70 @@
 #include <algorithm>
 #include <complex>
 #include <string>
+#include <iomanip>
 
 #include <Eigen/Core>
 #include <Eigen/SparseCore>
 
 namespace mmio {
 
-    /** Read a line real / cplx **/
-    template<typename V>
+    template<class T> struct is_complex : std::false_type {};
+    template<class T> struct is_complex<std::complex<T>> : std::true_type {};
+
+    /** Read a real / cplx scalar **/
+    template<typename V, std::enable_if_t<!is_complex<V>{}>* = nullptr>
     inline V read_entry(std::istringstream& vals) {
         V v;
         vals >> v;
         return v;
     };
-    template<>
-    inline std::complex<double> read_entry(std::istringstream& vals) {
-        double v1, v2;
+    template<typename V, std::enable_if_t<is_complex<V>{}>* = nullptr>
+    inline V read_line(std::istringstream& vals) {
+        typename V::value_type v1, v2;
         vals >> v1 >> v2;
-        return std::complex<double>(v1, v2);
-    };
-    template<>
-    inline std::complex<float> read_entry(std::istringstream& vals) {
-        float v1, v2;
-        vals >> v1 >> v2;
-        return std::complex<float>(v1, v2);
+        return V(v1, v2);
     };
 
     /** Read a line real / cplx of coordinate values **/
-    template<typename V, typename I>
+    template<typename V, typename I, std::enable_if_t<!is_complex<V>{}>* = nullptr>
     inline Eigen::Triplet<V,I> read_line(std::istringstream& vals) {
         I i, j;
         V v;
         vals >> i >> j >> v;
         return Eigen::Triplet<V,I>(i-1,j-1,v);
     };
-    template<>
-    inline Eigen::Triplet<std::complex<double>,int> read_line(std::istringstream& vals) {
-        int i, j; double v1, v2;
+    template<typename V, typename I, std::enable_if_t<is_complex<V>{}>* = nullptr>
+    inline Eigen::Triplet<V,I> read_line(std::istringstream& vals) {
+        I i, j;
+        typename V::value_type v1, v2;
         vals >> i >> j >> v1 >> v2;
-        return Eigen::Triplet<std::complex<double>,int>(i-1,j-1,std::complex<double>(v1, v2));
-    };
-    template<>
-    inline Eigen::Triplet<std::complex<float>,int> read_line(std::istringstream& vals) {
-        int i, j; float v1, v2;
-        vals >> i >> j >> v1 >> v2;
-        return Eigen::Triplet<std::complex<float>,int>(i-1,j-1,std::complex<float>(v1, v2));
+        return Eigen::Triplet<V,I>(i-1,j-1,V(v1,v2));
     };
 
     /** Write a line real / cplx of coordinate values **/
     template<typename V, typename I>
-    inline std::string get_line(I i, I j, V v) {
-        return std::to_string(i+1) + " " + std::to_string(j+1) + " " + std::to_string(v);
+    inline std::stringstream get_line(I i, I j, V v) {
+        std::stringstream s;
+        s << std::setprecision(20);
+        s << i+1 << " " << j+1 << " " << v;
+        return s;
     };
-    template<>
-    inline std::string get_line(int i, int j, std::complex<double> v) {
-        return std::to_string(i+1) + " " + std::to_string(j+1) + " " + std::to_string(v.real()) + " " + std::to_string(v.imag());
-    };
-    template<>
-    inline std::string get_line(int i, int j, std::complex<float> v) {
-        return std::to_string(i+1) + " " + std::to_string(j+1) + " " + std::to_string(v.real()) + " " + std::to_string(v.imag());
-    };
+    template<typename V, typename I>
+    inline std::stringstream get_line(I i, I j, std::complex<V> v) {
+        std::stringstream s;
+        s << std::setprecision(20);
+        s << i+1 << " " << j+1 << " " << v.real() << " " << v.imag();
+        return s;
+    };    
 
     /** Symmetric (real) / hermitian (cplx) **/
     template<typename V, typename I>
     inline Eigen::Triplet<V,I> symmetric(Eigen::Triplet<V,I>& a) {
         return Eigen::Triplet<V,I>(a.col(), a.row(), a.value());
     }
-    template<>
-    inline Eigen::Triplet<std::complex<double>,int> symmetric(Eigen::Triplet<std::complex<double>,int>& a) {
-        return Eigen::Triplet<std::complex<double>,int>(a.col(), a.row(), std::conj(a.value()));
-    }
-    template<>
-    inline Eigen::Triplet<std::complex<float>,int> symmetric(Eigen::Triplet<std::complex<float>,int>& a) {
-        return Eigen::Triplet<std::complex<float>,int>(a.col(), a.row(), std::conj(a.value()));
+    template<typename V, typename I>
+    inline Eigen::Triplet<std::complex<V>,I> symmetric(Eigen::Triplet<std::complex<V>,I>& a) {
+        return Eigen::Triplet<std::complex<V>,I>(a.col(), a.row(), std::conj(a.value()));
     }
 
     /** Skew-symmetric (real only, really) **/
@@ -103,7 +94,7 @@ namespace mmio {
     template<typename V>
     struct V2str {
         inline static std::string value() {
-            if (std::is_same<V,std::complex<double>>::value || std::is_same<V,std::complex<float>>::value) {
+            if(is_complex<V>{}) {
                 return "complex";
             } else if (std::is_integral<V>::value) {
                 return "integer";
@@ -234,7 +225,7 @@ namespace mmio {
             std::getline(mfile, line);
             std::istringstream header(line);
             Header h(header);
-            assert(h.p == property::general);
+            assert(h.p == property::general); // We don't really support anything else so far...
             assert(h.f == format::array);
             assert(h.t != type::pattern);
             /** Find M N row **/
@@ -271,7 +262,8 @@ namespace mmio {
     template<typename V, int S, typename I>
     inline void sp_mmwrite(std::string filename, Eigen::SparseMatrix<V,S,I> mat, property p = property::general) {
         std::ofstream mfile;
-        mfile.open (filename);
+        mfile.open(filename);
+        // mfile.open (filename);
         if (mfile.is_open()) {
             std::string type = V2str<V>::value();
             std::string prop = prop2str(p);
@@ -289,12 +281,13 @@ namespace mmio {
                 for (typename Eigen::SparseMatrix<V,S,I>::InnerIterator it(mat,k); it; ++it) {
                     if( (p == property::symmetric || p == property::hermitian) && (it.row() < it.col()) ) continue;
                     if( (p == property::skew_symmetric) && (it.row() <= it.col()) ) continue;
-                    mfile << get_line(it.row(), it.col(), it.value()) << "\n";
+                    mfile << get_line(it.row(), it.col(), it.value()).rdbuf() << "\n";
                 }
             }
-        } else {
+        } else {            
             throw("Couldn't open file");
         }
+        mfile.close();
     }
 
     /**
