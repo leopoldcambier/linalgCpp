@@ -16,19 +16,19 @@ namespace mmio {
 
     /** Read a line real / cplx **/
     template<typename V>
-    V read_entry(std::istringstream& vals) {
+    inline V read_entry(std::istringstream& vals) {
         V v;
         vals >> v;
         return v;
     };
     template<>
-    std::complex<double> read_entry(std::istringstream& vals) {
+    inline std::complex<double> read_entry(std::istringstream& vals) {
         double v1, v2;
         vals >> v1 >> v2;
         return std::complex<double>(v1, v2);
     };
     template<>
-    std::complex<float> read_entry(std::istringstream& vals) {
+    inline std::complex<float> read_entry(std::istringstream& vals) {
         float v1, v2;
         vals >> v1 >> v2;
         return std::complex<float>(v1, v2);
@@ -36,20 +36,20 @@ namespace mmio {
 
     /** Read a line real / cplx of coordinate values **/
     template<typename V, typename I>
-    Eigen::Triplet<V,I> read_line(std::istringstream& vals) {
+    inline Eigen::Triplet<V,I> read_line(std::istringstream& vals) {
         I i, j;
         V v;
         vals >> i >> j >> v;
         return Eigen::Triplet<V,I>(i-1,j-1,v);
     };
     template<>
-    Eigen::Triplet<std::complex<double>,int> read_line(std::istringstream& vals) {
+    inline Eigen::Triplet<std::complex<double>,int> read_line(std::istringstream& vals) {
         int i, j; double v1, v2;
         vals >> i >> j >> v1 >> v2;
         return Eigen::Triplet<std::complex<double>,int>(i-1,j-1,std::complex<double>(v1, v2));
     };
     template<>
-    Eigen::Triplet<std::complex<float>,int> read_line(std::istringstream& vals) {
+    inline Eigen::Triplet<std::complex<float>,int> read_line(std::istringstream& vals) {
         int i, j; float v1, v2;
         vals >> i >> j >> v1 >> v2;
         return Eigen::Triplet<std::complex<float>,int>(i-1,j-1,std::complex<float>(v1, v2));
@@ -57,35 +57,35 @@ namespace mmio {
 
     /** Write a line real / cplx of coordinate values **/
     template<typename V, typename I>
-    std::string get_line(I i, I j, V v) {
+    inline std::string get_line(I i, I j, V v) {
         return std::to_string(i+1) + " " + std::to_string(j+1) + " " + std::to_string(v);
     };
     template<>
-    std::string get_line(int i, int j, std::complex<double> v) {
+    inline std::string get_line(int i, int j, std::complex<double> v) {
         return std::to_string(i+1) + " " + std::to_string(j+1) + " " + std::to_string(v.real()) + " " + std::to_string(v.imag());
     };
     template<>
-    std::string get_line(int i, int j, std::complex<float> v) {
+    inline std::string get_line(int i, int j, std::complex<float> v) {
         return std::to_string(i+1) + " " + std::to_string(j+1) + " " + std::to_string(v.real()) + " " + std::to_string(v.imag());
     };
 
     /** Symmetric (real) / hermitian (cplx) **/
     template<typename V, typename I>
-    Eigen::Triplet<V,I> symmetric(Eigen::Triplet<V,I>& a) {
+    inline Eigen::Triplet<V,I> symmetric(Eigen::Triplet<V,I>& a) {
         return Eigen::Triplet<V,I>(a.col(), a.row(), a.value());
     }
     template<>
-    Eigen::Triplet<std::complex<double>,int> symmetric(Eigen::Triplet<std::complex<double>,int>& a) {
+    inline Eigen::Triplet<std::complex<double>,int> symmetric(Eigen::Triplet<std::complex<double>,int>& a) {
         return Eigen::Triplet<std::complex<double>,int>(a.col(), a.row(), std::conj(a.value()));
     }
     template<>
-    Eigen::Triplet<std::complex<float>,int> symmetric(Eigen::Triplet<std::complex<float>,int>& a) {
+    inline Eigen::Triplet<std::complex<float>,int> symmetric(Eigen::Triplet<std::complex<float>,int>& a) {
         return Eigen::Triplet<std::complex<float>,int>(a.col(), a.row(), std::conj(a.value()));
     }
 
     /** Skew-symmetric (real only, really) **/
     template<typename V, typename I>
-    Eigen::Triplet<V,I> skew_symmetric(Eigen::Triplet<V,I>& a) {
+    inline Eigen::Triplet<V,I> skew_symmetric(Eigen::Triplet<V,I>& a) {
         return Eigen::Triplet<V,I>(a.col(), a.row(), - a.value());
     }
 
@@ -93,7 +93,7 @@ namespace mmio {
     enum class type {real, integer, complex, pattern};
     enum class property {general, symmetric, hermitian, skew_symmetric};
 
-    std::string prop2str(property p) {
+    inline std::string prop2str(property p) {
         if(p == property::general) return "general";
         else if(p == property::symmetric) return "symmetric";
         else if(p == property::hermitian) return "hermitian";
@@ -102,7 +102,7 @@ namespace mmio {
 
     template<typename V>
     struct V2str {
-        static std::string value() {
+        inline static std::string value() {
             if (std::is_same<V,std::complex<double>>::value || std::is_same<V,std::complex<float>>::value) {
                 return "complex";
             } else if (std::is_integral<V>::value) {
@@ -166,7 +166,7 @@ namespace mmio {
      * Read a sparse matrix in MM format
      */
     template<typename V, typename I>
-    Eigen::SparseMatrix<V, Eigen::ColMajor, I> sp_mmread(std::string filename) {
+    inline Eigen::SparseMatrix<V, Eigen::ColMajor, I> sp_mmread(std::string filename) {
         std::ifstream mfile(filename);
         if (mfile.is_open()) {
             std::string line;
@@ -226,7 +226,7 @@ namespace mmio {
      * Reads a dense matrix in MM format
      */
     template<typename V>
-    Eigen::Matrix<V, Eigen::Dynamic, Eigen::Dynamic> dense_mmread(std::string filename) {
+    inline Eigen::Matrix<V, Eigen::Dynamic, Eigen::Dynamic> dense_mmread(std::string filename) {
         std::ifstream mfile(filename);
         if (mfile.is_open()) {
             std::string line;
@@ -269,7 +269,7 @@ namespace mmio {
      * Wether the matrix satisfies or not p is not verified
      */
     template<typename V, int S, typename I>
-    void sp_mmwrite(std::string filename, Eigen::SparseMatrix<V,S,I> mat, property p = property::general) {
+    inline void sp_mmwrite(std::string filename, Eigen::SparseMatrix<V,S,I> mat, property p = property::general) {
         std::ofstream mfile;
         mfile.open (filename);
         if (mfile.is_open()) {
@@ -302,7 +302,7 @@ namespace mmio {
      * Wether the matrix satisfies or not p is not verified
      */
     template<typename V>
-    void dense_mmwrite(std::string filename, Eigen::Matrix<V, Eigen::Dynamic, Eigen::Dynamic> mat, property p = property::general) {
+    inline void dense_mmwrite(std::string filename, Eigen::Matrix<V, Eigen::Dynamic, Eigen::Dynamic> mat, property p = property::general) {
         std::ofstream mfile;
         mfile.open (filename);
         if (mfile.is_open()) {
