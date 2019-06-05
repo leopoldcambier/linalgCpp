@@ -209,6 +209,7 @@ namespace mmio {
             A.setFromTriplets(data.begin(), data.end());
             return std::move(A);
         } else {
+            std::cout << "Couldn't open " << filename << std::endl;
             throw("Couldn't open file");
         }
     }
@@ -251,6 +252,7 @@ namespace mmio {
             assert(lineread == M*N);
             return std::move(A);
         } else {
+            std::cout << "Couldn't open " << filename << std::endl;
             throw("Couldn't open file");
         }
     }
@@ -284,10 +286,10 @@ namespace mmio {
                     mfile << get_line(it.row(), it.col(), it.value()).rdbuf() << "\n";
                 }
             }
-        } else {            
+        } else {
+            std::cout << "Couldn't open " << filename << std::endl;       
             throw("Couldn't open file");
         }
-        mfile.close();
     }
 
     /**
@@ -311,6 +313,7 @@ namespace mmio {
                 }
             }
         } else {
+            std::cout << "Couldn't open " << filename << std::endl;
             throw("Couldn't open file");
         }
     }
