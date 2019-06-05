@@ -9,6 +9,7 @@
 #include <complex>
 #include <string>
 #include <iomanip>
+#include <type_traits>
 
 #include <Eigen/Core>
 #include <Eigen/SparseCore>
